@@ -1,8 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
-#define MAX_COMMAND_LENGTH 50
+#include <sys/types.h>
 
 // Declaração das Funções
 int bankerAlgorithm(int **currentAllocation, int **remainingNeed, int *availableResources, int numberOfCustomers, int numberOfResources);
@@ -13,6 +12,7 @@ void printAllMatrices(FILE *filePointer, int rows, int cols);
 int readCustomerMaximumDemand(const char *filename, int numberOfCustomers, int numberOfResources);
 int processBankerCommands(const char *filename, int **currentAllocation, int **remainingNeed, int *availableResources, int numberOfCustomers, int numberOfResources, FILE *outputFile);
 int countNumberOfCustomers(const char *filename);
+int countNumberOfResources(const char *filename);
 int** allocate2DMatrix(int rows, int cols);
 void free2DMatrix(int **matrix, int rows);
 
@@ -27,7 +27,7 @@ int main(int argc, char *argv[])
     int *availableResources;          // Recursos disponíveis 
     int numberOfCustomers;            // Número de clientes que vão estar presentes no arquivo customer.txt
     int numberOfResources = argc - 1; // O primeiro argumento é o nome do programa, logo não conta
-    cmdLineResources = argc - 1;     // Pega a quantidade de recursos passados na linha de comando pra fazer verificação de erro
+    cmdLineResources = argc - 1;      // Pega a quantidade de recursos passados na linha de comando pra fazer verificação de erro
 
     // Aloca memória para recursos disponíveis
     availableResources = (int *)malloc(numberOfResources * sizeof(int));
@@ -44,6 +44,15 @@ int main(int argc, char *argv[])
         free(availableResources);
         return 1;
     }
+
+    int fileNumberOfResources = countNumberOfResources("customer.txt");
+    if (fileNumberOfResources != numberOfResources) 
+    {
+        printf("Incompatibility between customer.txt and command line\n");
+        free(availableResources);
+        return 1;
+    }
+
 
     // Alocando memória para as matrizes
     currentAllocation = allocate2DMatrix(numberOfCustomers, numberOfResources); // Aloca a matriz de alocação atual
@@ -137,22 +146,24 @@ int readCustomerMaximumDemand(const char *filename, int numberOfCustomers, int n
 // Processa os comandos do arquivo commands.txt, lidando com a alocação e liberação de recursos baseado nos comandos presentes no arquivo
 int processBankerCommands(const char *filename, int **currentAllocation, int **remainingNeed, int *availableResources, int numberOfCustomers, int numberOfResources, FILE *outputFile) 
 {
-    // Abre o arquivo
     FILE *file = fopen(filename, "r");
     if (!file)
     {
         return 0;
-    } 
+    }
 
-    char line[MAX_COMMAND_LENGTH];                  // Tamanho máximo de uma linha do arquivo
-    while (fgets(line, sizeof(line), file) != NULL) // Lê cada linha do arquivo até chegar no final do arquivo
+    char *line = NULL;         // Inicializa line como NULL
+    size_t len = 0;            // Tamanho da linha
+    ssize_t read;              // Número de caracteres lidos
+
+    while ((read = getline(&line, &len, file)) != -1) // Lê cada linha do arquivo
     {
         char command[3];                  // Guarda o comando a ser executado (RQ ou RL)
         int customerID;                   // Guarda o ID do cliente a ser alocado ou liberado
         int resources[numberOfResources]; // Guarda os recursos a serem alocados ou liberados
 
         // Se a linha for igual a *, imprime as matrizes e os recursos disponíveis
-        if (strcmp(line, "*\n") == 0)     
+        if (strcmp(line, "*\n") == 0 || strcmp(line, "*") == 0)     
         {
             printAllMatrices(outputFile, numberOfCustomers, numberOfResources); // Imprime as matrizes no arquivo
             fprintf(outputFile, "AVAILABLE ");                                  
@@ -167,6 +178,7 @@ int processBankerCommands(const char *filename, int **currentAllocation, int **r
         if (sscanf(line, "%2s %d", command, &customerID) < 2) // Lê o comando e o ID do cliente, se não conseguir, o arquivo está mal formatado
         {
             fclose(file);
+            free(line);
             return 0;
         }
 
@@ -180,6 +192,7 @@ int processBankerCommands(const char *filename, int **currentAllocation, int **r
             if (i >= cmdLineResources) // Se o número de recursos passados na linha de comando for maior que o número de recursos esperado
             {
                 fclose(file);
+                free(line);
                 return 0;
             }
             resources[i] = atoi(token); // E guarda no vetor de recursos como inteiro
@@ -198,13 +211,20 @@ int processBankerCommands(const char *filename, int **currentAllocation, int **r
         else // Se o comando não for RQ ou RL, fecha o arquivo e retorna 0 (arquivo mal formatado)
         {
             fclose(file);
+            free(line);
             return 0;
         }
+
+        // Libera a memória da linha atual antes de ler a próxima linha
+        free(line);
+        line = NULL;
     }
 
-    fclose(file); // Fecha o arquivo e retorna 1 (sucesso)
+    fclose(file); 
+    free(line); // Libere qualquer memória que possa ter sido alocada
     return 1;
 }
+
 
 // Processa recursos solicitados por um cliente e printa no arquivo se o pedido foi aceito ou negado e o motivo
 void requestResources(int **currentAllocation, int **remainingNeed, int *availableResources, int numberOfCustomers, int numberOfResources, int customerID, int *requestedResources, FILE *outputFile) 
@@ -325,7 +345,7 @@ void releaseResources(int **currentAllocation, int **remainingNeed, int *availab
 void printAllMatrices(FILE *filePointer, int rows, int cols) 
 {
     fprintf(filePointer, "MAXIMUM | ALLOCATION | NEED\n");
-    // MAXIMUM | ALLOCATION | NEED
+
     for (int i = 0; i < rows; i++) 
     {
         // MAXIMUM
@@ -429,25 +449,59 @@ int checkSafety(int **currentAllocation, int **remainingNeed, int *availableReso
 // Conta o número de clientes no arquivo customer.txt
 int countNumberOfCustomers(const char *filename) 
 {
-    // Abre o arquivo
     FILE *file = fopen(filename, "r");
     if (!file) 
     {
         return 0;
     }
 
-    int customerCount = 0; // Contador de clientes
-    char buffer[1024];     // Tamanho máximo de uma linha do arquivo
+    int customerCount = 0; // Conta o número de clientes
+    char *line = NULL;     // Inicializa line como NULL
+    size_t len = 0;        // Tamanho da linha
 
-    // Lê cada linha do arquivo até chegar no final do arquivo
-    while (fgets(buffer, sizeof(buffer), file)) 
+    while (getline(&line, &len, file) != -1) // Lê cada linha do arquivo
     {
-        customerCount++;   // Incrementa o contador de clientes
+        customerCount++;
     }
 
-    fclose(file);          // Fecha o arquivo
-    return customerCount;  // Retorna o número de clientes
+    free(line);           // Libera a memória alocada por getline
+    fclose(file);         // Fecha o arquivo
+    return customerCount; // Retorna o número de clientes
 }
+
+
+// Conta o número de colunas (recursos) no arquivo customer.txt
+int countNumberOfResources(const char *filename) 
+{
+    FILE *file = fopen(filename, "r");
+    if (!file) 
+    {
+        return -1;
+    }
+
+    char *line = NULL; // Inicializa line como NULL
+    size_t len = 0;    // Tamanho da linha
+    if (getline(&line, &len, file) == -1) 
+    {
+        fclose(file);
+        if (line) free(line); // Libera a memória se getline foi chamada
+        return -1;
+    }
+
+    int resourceCount = 0;           // Conta o número de recursos
+    char *token = strtok(line, ","); // Divide a linha em tokens separados por vírgula
+
+    while (token != NULL)            // Lê cada token
+    {
+        resourceCount++;             // Incrementa o número de recursos
+        token = strtok(NULL, ",");   // Pega o próximo token
+    }
+
+    free(line); // Libera a memória alocada por getline
+    fclose(file);
+    return resourceCount;
+}
+
 
 // Aloca memória para uma matriz 2D
 int** allocate2DMatrix(int rows, int cols) 
@@ -472,7 +526,3 @@ void free2DMatrix(int **matrix, int rows)
     }
     free(matrix); // Libera a memória alocada para a matriz
 }
-
-// ver a parte que se colocar menos de 3 comandos na linha de comando, o programa não deve executar
-// ver a parte sobre a identação do print da matriz no arquivo result.txt em relação ao MAXIMUM, ALLOCATION e NEED
-// ver a parte sobre o MAX_COMMAND_LENGTH , no caso a gente nao tem um tamanho maximo de comando, mas o programa tem que funcionar com qualquer tamanho de comando
