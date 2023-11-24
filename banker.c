@@ -396,11 +396,11 @@ int bankerAlgorithm(int **currentAllocation, int **remainingNeed, int *available
 // Checa se o estado é seguro (O estado é seguro se existe uma sequência segura) | O verdadeiro Banker's Algorithm
 int checkSafety(int **currentAllocation, int **remainingNeed, int *availableResources, int numberOfCustomers, int numberOfResources, int *safeSequence) 
 {
-    int finished[numberOfCustomers]; // Vetor para armazenar se a NEED do cliente foi satisfeita ou não
-    int work[numberOfResources];     // Vetor que copia os recursos disponíveis, representando os recursos disponíveis que podem ser usados
+    int done[numberOfCustomers]; // Vetor para armazenar se a NEED do cliente foi satisfeita ou não
+    int work[numberOfResources]; // Vetor que copia os recursos disponíveis, representando os recursos disponíveis que podem ser usados
 
     memcpy(work, availableResources, numberOfResources * sizeof(int)); // Copia os recursos disponíveis para o vetor work
-    memset(finished, 0, numberOfCustomers * sizeof(int));              // Inicializa o vetor finished com 0
+    memset(done, 0, numberOfCustomers * sizeof(int));              // Inicializa o vetor done com 0
 
     // Checa cada cliente até que todos os clientes tenham sido processados
     for (int k = 0; k < numberOfCustomers; k++) 
@@ -408,7 +408,7 @@ int checkSafety(int **currentAllocation, int **remainingNeed, int *availableReso
         // Checa o recurso NEED do cliente pode ser satisfeito com os recursos disponíveis (work)
         for (int i = 0; i < numberOfCustomers; i++) 
         {
-            if (!finished[i]) // Se a NEED do cliente não foi satisfeita
+            if (!done[i]) // Se a NEED do cliente não foi satisfeita
             {
                 int j;
                 for (j = 0; j < numberOfResources; j++)     // Checa se o recurso NEED do cliente pode ser satisfeito com os recursos disponíveis (work)
@@ -424,7 +424,7 @@ int checkSafety(int **currentAllocation, int **remainingNeed, int *availableReso
                     {
                         work[j] += currentAllocation[i][j]; // Adiciona temporariamente os recursos alocados pelo cliente aos recursos disponíveis (work)
                     }
-                    finished[i] = 1;                        // Marca o cliente como processado
+                    done[i] = 1;                        // Marca o cliente como processado
                     if (safeSequence != NULL)
                     {
                         safeSequence[k] = i;                // Adiciona o cliente a sequência segura
@@ -438,7 +438,7 @@ int checkSafety(int **currentAllocation, int **remainingNeed, int *availableReso
     // Checa se todos os clientes foram processados
     for (int i = 0; i < numberOfCustomers; i++) 
     {
-        if (!finished[i]) 
+        if (!done[i]) 
         {
             return 0; // Não é seguro
         }
