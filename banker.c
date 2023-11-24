@@ -24,26 +24,37 @@ int cmdLineResources;    // Número de recursos passados na linha de comando
 
 int main(int argc, char *argv[]) 
 {
-    int *availableResources;          // Recursos disponíveis 
-    int numberOfCustomers;            // Número de clientes que vão estar presentes no arquivo customer.txt
-    int numberOfResources = argc - 1; // O primeiro argumento é o nome do programa, logo não conta
-    cmdLineResources = argc - 1;      // Pega a quantidade de recursos passados na linha de comando pra fazer verificação de erro
-
-    // Aloca memória para recursos disponíveis
-    availableResources = (int *)malloc(numberOfResources * sizeof(int));
-    for (int i = 0; i < numberOfResources; i++) 
+    // Verifica se o arquivo commands.txt pode ser aberto
+    FILE *testFile = fopen("commands.txt", "r");
+    if (!testFile) 
     {
-        availableResources[i] = atoi(argv[i + 1]); // atoi vai converter o argumento para inteiro
-    }
-
-    // Lendo o número de clientes
-    numberOfCustomers = countNumberOfCustomers("customer.txt");
-    if (numberOfCustomers == 0) 
-    {
-        printf("Fail to read customer.txt\n");
-        free(availableResources);
+        printf("Fail to read commands.txt\n");
         return 1;
     }
+    fclose(testFile);
+
+    // Verifica se o arquivo customer.txt pode ser aberto
+    testFile = fopen("customer.txt", "r");
+    if (!testFile) 
+    {
+        printf("Fail to read customer.txt\n");
+        return 1;
+    }
+    fclose(testFile);
+
+    // Variaveis pra verificar o número de clientes e recursos da linha de comando
+    int numberOfResources = argc - 1;
+    cmdLineResources = argc - 1;
+
+    // Aloca memória para recursos disponíveis
+    int *availableResources = (int *)malloc(numberOfResources * sizeof(int));
+    for (int i = 0; i < numberOfResources; i++) 
+    {
+        availableResources[i] = atoi(argv[i + 1]);
+    }
+
+    // Obtém o número de clientes do arquivo customer.txt
+    int numberOfCustomers = countNumberOfCustomers("customer.txt");
 
     int fileNumberOfResources = countNumberOfResources("customer.txt");
     if (fileNumberOfResources != numberOfResources) 
@@ -53,7 +64,6 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-
     // Alocando memória para as matrizes
     currentAllocation = allocate2DMatrix(numberOfCustomers, numberOfResources); // Aloca a matriz de alocação atual
     maximumDemand = allocate2DMatrix(numberOfCustomers, numberOfResources);     // Aloca a matriz de demanda máxima
@@ -62,7 +72,7 @@ int main(int argc, char *argv[])
     // Lendo as demandas máximas dos clientes
     if (!readCustomerMaximumDemand("customer.txt", numberOfCustomers, numberOfResources)) 
     {
-        printf("Incompatibility between customer.txt and command line\n");
+        printf("Fail to read customer.txt\n");
         goto cleanup;
     }
 
@@ -94,7 +104,7 @@ int main(int argc, char *argv[])
     // Fecha o arquivo
     fclose(outputFile);
 
-// Libera a memória alocada em caso de erro
+    // Libera a memória alocada e termina o programa
 cleanup:
     free2DMatrix(currentAllocation, numberOfCustomers);
     free2DMatrix(maximumDemand, numberOfCustomers);
@@ -102,6 +112,7 @@ cleanup:
     free(availableResources);
     return 0;
 }
+
 
 // Lê a demanda máxima dos clientes do arquivo customer.txt
 int readCustomerMaximumDemand(const char *filename, int numberOfCustomers, int numberOfResources) 
@@ -396,11 +407,11 @@ int bankerAlgorithm(int **currentAllocation, int **remainingNeed, int *available
 // Checa se o estado é seguro (O estado é seguro se existe uma sequência segura) | O verdadeiro Banker's Algorithm
 int checkSafety(int **currentAllocation, int **remainingNeed, int *availableResources, int numberOfCustomers, int numberOfResources, int *safeSequence) 
 {
-    int done[numberOfCustomers]; // Vetor para armazenar se a NEED do cliente foi satisfeita ou não
-    int work[numberOfResources]; // Vetor que copia os recursos disponíveis, representando os recursos disponíveis que podem ser usados
+    int finished[numberOfCustomers]; // Vetor para armazenar se a NEED do cliente foi satisfeita ou não
+    int work[numberOfResources];     // Vetor que copia os recursos disponíveis, representando os recursos disponíveis que podem ser usados
 
     memcpy(work, availableResources, numberOfResources * sizeof(int)); // Copia os recursos disponíveis para o vetor work
-    memset(done, 0, numberOfCustomers * sizeof(int));              // Inicializa o vetor done com 0
+    memset(finished, 0, numberOfCustomers * sizeof(int));              // Inicializa o vetor finished com 0
 
     // Checa cada cliente até que todos os clientes tenham sido processados
     for (int k = 0; k < numberOfCustomers; k++) 
@@ -408,7 +419,7 @@ int checkSafety(int **currentAllocation, int **remainingNeed, int *availableReso
         // Checa o recurso NEED do cliente pode ser satisfeito com os recursos disponíveis (work)
         for (int i = 0; i < numberOfCustomers; i++) 
         {
-            if (!done[i]) // Se a NEED do cliente não foi satisfeita
+            if (!finished[i]) // Se a NEED do cliente não foi satisfeita
             {
                 int j;
                 for (j = 0; j < numberOfResources; j++)     // Checa se o recurso NEED do cliente pode ser satisfeito com os recursos disponíveis (work)
@@ -424,7 +435,7 @@ int checkSafety(int **currentAllocation, int **remainingNeed, int *availableReso
                     {
                         work[j] += currentAllocation[i][j]; // Adiciona temporariamente os recursos alocados pelo cliente aos recursos disponíveis (work)
                     }
-                    done[i] = 1;                        // Marca o cliente como processado
+                    finished[i] = 1;                        // Marca o cliente como processado
                     if (safeSequence != NULL)
                     {
                         safeSequence[k] = i;                // Adiciona o cliente a sequência segura
@@ -438,7 +449,7 @@ int checkSafety(int **currentAllocation, int **remainingNeed, int *availableReso
     // Checa se todos os clientes foram processados
     for (int i = 0; i < numberOfCustomers; i++) 
     {
-        if (!done[i]) 
+        if (!finished[i]) 
         {
             return 0; // Não é seguro
         }
